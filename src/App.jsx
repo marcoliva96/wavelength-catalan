@@ -15,19 +15,21 @@ const PHASES = {
 const NUM_POSITIONS = 21; // 0-20
 
 function shuffleCards() {
-  const shuffled = [...cards].sort(() => Math.random() - 0.5);
-  return shuffled;
+  return [...cards].sort(() => Math.random() - 0.5);
 }
 
 function App() {
-  // ── Players ──
-  const [player1, setPlayer1] = useState({ name: '', avatar: '😎', score: 0 });
-  const [player2, setPlayer2] = useState({ name: '', avatar: '🤩', score: 0 });
+  // ── Teams ──
+  const [teams, setTeams] = useState([
+    { name: 'Equip 1', players: [], score: 0 },
+    { name: 'Equip 2', players: [], score: 0 },
+  ]);
   const [winPoints, setWinPoints] = useState(10);
 
   // ── Game state ──
   const [phase, setPhase] = useState(PHASES.SETUP);
-  const [currentPsychic, setCurrentPsychic] = useState(1); // 1 or 2
+  const [currentTeamIdx, setCurrentTeamIdx] = useState(0);
+  const [psychicIndices, setPsychicIndices] = useState([0, 0]); // per-team rotation
   const [target, setTarget] = useState(10);
   const [clue, setClue] = useState('');
   const [guess, setGuess] = useState(10);
@@ -36,21 +38,25 @@ function App() {
   const [deck, setDeck] = useState([]);
   const [deckIndex, setDeckIndex] = useState(0);
 
-  const psychic = currentPsychic === 1 ? player1 : player2;
-  const guesser = currentPsychic === 1 ? player2 : player1;
+  // Derived: current psychic & guesser (same team)
+  const currentTeam = teams[currentTeamIdx];
+  const psychicIdx = psychicIndices[currentTeamIdx];
+  const psychic = currentTeam?.players?.[psychicIdx] || { name: '', avatar: '😎' };
+  const guesserIdx = currentTeam?.players?.length > 0
+    ? (psychicIdx + 1) % currentTeam.players.length
+    : 0;
+  const guesser = currentTeam?.players?.[guesserIdx] || { name: '', avatar: '🤩' };
 
-  const handleSetupDone = useCallback(({ p1, p2, points }) => {
-    setPlayer1({ ...p1, score: 0 });
-    setPlayer2({ ...p2, score: 0 });
+  const handleSetupDone = useCallback(({ teams: newTeams, points }) => {
+    setTeams(newTeams.map(t => ({ ...t, score: 0 })));
     setWinPoints(points);
-    setCurrentPsychic(1);
+    setCurrentTeamIdx(0);
+    setPsychicIndices([0, 0]);
 
-    // Shuffle deck
     const shuffled = shuffleCards();
     setDeck(shuffled);
     setDeckIndex(0);
 
-    // Start first round
     const newTarget = Math.floor(Math.random() * NUM_POSITIONS);
     setTarget(newTarget);
     setCurrentCard(shuffled[0]);
@@ -60,15 +66,19 @@ function App() {
   }, []);
 
   const startNextRound = useCallback(() => {
-    // Swap psychic
-    const nextPsychic = currentPsychic === 1 ? 2 : 1;
-    setCurrentPsychic(nextPsychic);
+    // Advance psychic index for the team that just played
+    const newPsychicIndices = [...psychicIndices];
+    newPsychicIndices[currentTeamIdx] =
+      (psychicIndices[currentTeamIdx] + 1) % teams[currentTeamIdx].players.length;
+    setPsychicIndices(newPsychicIndices);
+
+    // Switch to other team
+    setCurrentTeamIdx(prev => (prev === 0 ? 1 : 0));
 
     // Next card from deck
     let nextIdx = deckIndex + 1;
     let currentDeck = deck;
     if (nextIdx >= currentDeck.length) {
-      // Reshuffle
       currentDeck = shuffleCards();
       setDeck(currentDeck);
       nextIdx = 0;
@@ -81,18 +91,13 @@ function App() {
     setClue('');
     setGuess(10);
     setPhase(PHASES.PSYCHIC);
-  }, [currentPsychic, deckIndex, deck]);
+  }, [currentTeamIdx, psychicIndices, teams, deckIndex, deck]);
 
-  const handlePsychicDone = () => {
-    setPhase(PHASES.TRANSITION);
-  };
+  const handlePsychicDone = () => setPhase(PHASES.TRANSITION);
+  const handleTransitionDone = () => setPhase(PHASES.GUESSER);
 
-  const handleTransitionDone = () => {
-    setPhase(PHASES.GUESSER);
-  };
-
-  const calculateScore = (target, guess) => {
-    const diff = Math.abs(target - guess);
+  const calculateScore = (t, g) => {
+    const diff = Math.abs(t - g);
     if (diff === 0) return 4;
     if (diff === 1) return 3;
     if (diff === 2) return 2;
@@ -103,28 +108,15 @@ function App() {
     const score = calculateScore(target, guess);
     setRoundScore(score);
 
-    // Add score to the guesser's total
-    const guesserNum = currentPsychic === 1 ? 2 : 1;
-    if (guesserNum === 1) {
-      const newScore = player1.score + score;
-      setPlayer1(prev => ({ ...prev, score: newScore }));
-      if (newScore >= winPoints) {
-        setPhase(PHASES.REVEAL); // Show reveal first, then win
-      } else {
-        setPhase(PHASES.REVEAL);
-      }
-    } else {
-      const newScore = player2.score + score;
-      setPlayer2(prev => ({ ...prev, score: newScore }));
-      setPhase(PHASES.REVEAL);
-    }
+    // Add score to the team
+    setTeams(prev => prev.map((t, i) =>
+      i === currentTeamIdx ? { ...t, score: t.score + score } : t
+    ));
+    setPhase(PHASES.REVEAL);
   };
 
   const handleRevealNext = () => {
-    // Check if someone won (scores were already updated)
-    const guesserNum = currentPsychic === 1 ? 2 : 1;
-    const guesserScore = guesserNum === 1 ? player1.score : player2.score;
-    if (guesserScore >= winPoints) {
+    if (teams[currentTeamIdx].score >= winPoints) {
       setPhase(PHASES.WIN);
     } else {
       startNextRound();
@@ -132,19 +124,17 @@ function App() {
   };
 
   const handlePlayAgain = () => {
-    setPlayer1(prev => ({ ...prev, score: 0 }));
-    setPlayer2(prev => ({ ...prev, score: 0 }));
+    setTeams(prev => prev.map(t => ({ ...t, score: 0 })));
     setPhase(PHASES.SETUP);
   };
 
-  const winner = player1.score >= winPoints ? player1 : player2;
+  const winnerTeamIdx = teams[0].score >= winPoints ? 0 : 1;
 
   return (
     <div className="app-container">
       {phase === PHASES.SETUP && (
         <SetupScreen
-          initialP1={player1}
-          initialP2={player2}
+          initialTeams={teams}
           initialPoints={winPoints}
           onStart={handleSetupDone}
         />
@@ -159,8 +149,8 @@ function App() {
           card={currentCard}
           psychic={psychic}
           guesser={guesser}
-          player1={player1}
-          player2={player2}
+          teams={teams}
+          currentTeamIdx={currentTeamIdx}
           winPoints={winPoints}
         />
       )}
@@ -169,6 +159,8 @@ function App() {
         <TransitionScreen
           onReady={handleTransitionDone}
           guesser={guesser}
+          teamName={currentTeam.name}
+          currentTeamIdx={currentTeamIdx}
         />
       )}
 
@@ -180,8 +172,8 @@ function App() {
           onConfirm={handleGuesserDone}
           card={currentCard}
           guesser={guesser}
-          player1={player1}
-          player2={player2}
+          teams={teams}
+          currentTeamIdx={currentTeamIdx}
           winPoints={winPoints}
         />
       )}
@@ -196,17 +188,16 @@ function App() {
           card={currentCard}
           psychic={psychic}
           guesser={guesser}
-          player1={player1}
-          player2={player2}
+          teams={teams}
+          currentTeamIdx={currentTeamIdx}
           winPoints={winPoints}
         />
       )}
 
       {phase === PHASES.WIN && (
         <WinScreen
-          winner={winner}
-          player1={player1}
-          player2={player2}
+          winnerTeamIdx={winnerTeamIdx}
+          teams={teams}
           onPlayAgain={handlePlayAgain}
         />
       )}

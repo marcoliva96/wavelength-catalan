@@ -1,41 +1,80 @@
 import React, { useState } from 'react';
 import Dial from './Dial';
-import { Eye, EyeOff, Check, ArrowRight, Play, Trophy, RotateCcw } from 'lucide-react';
+import { Eye, EyeOff, Check, ArrowRight, Play, RotateCcw, Plus, X } from 'lucide-react';
 
 const AVATARS = ['😎', '🤩', '🦊', '🐱', '🐶', '🦄', '🎸', '🌟', '🔥', '💎', '🍕', '🎯', '🧠', '👻', '🤖', '🦋'];
+const TEAM_COLORS = ['#ff6b6b', '#4ecdc4'];
 
-/* ── Score bar (shown on game screens) ── */
-function ScoreBar({ player1, player2, winPoints }) {
+/* ── Score bar (team-based) ── */
+function ScoreBar({ teams, currentTeamIdx, winPoints }) {
     return (
         <div className="score-bar">
-            <div className="score-bar-player">
-                <span className="score-bar-avatar">{player1.avatar}</span>
-                <span className="score-bar-name">{player1.name}</span>
-                <span className="score-bar-pts">{player1.score}/{winPoints}</span>
-            </div>
-            <div className="score-bar-player">
-                <span className="score-bar-pts">{player2.score}/{winPoints}</span>
-                <span className="score-bar-name">{player2.name}</span>
-                <span className="score-bar-avatar">{player2.avatar}</span>
-            </div>
+            {teams.map((team, i) => (
+                <div key={i} className={`score-bar-team ${i === currentTeamIdx ? 'active' : ''}`}>
+                    <span className="score-bar-team-name" style={{ color: TEAM_COLORS[i] }}>
+                        {team.name}
+                    </span>
+                    <span className="score-bar-pts">{team.score}/{winPoints}</span>
+                </div>
+            ))}
         </div>
     );
 }
 
 /* ── SETUP ── */
-export function SetupScreen({ initialP1, initialP2, initialPoints, onStart }) {
-    const [p1Name, setP1Name] = useState(initialP1.name || '');
-    const [p1Avatar, setP1Avatar] = useState(initialP1.avatar || '😎');
-    const [p2Name, setP2Name] = useState(initialP2.name || '');
-    const [p2Avatar, setP2Avatar] = useState(initialP2.avatar || '🤩');
+export function SetupScreen({ initialTeams, initialPoints, onStart }) {
+    const [teamNames, setTeamNames] = useState(initialTeams.map(t => t.name));
+    const [teamPlayers, setTeamPlayers] = useState(
+        initialTeams.map((t, ti) =>
+            t.players.length >= 2
+                ? t.players
+                : [
+                    { name: '', avatar: AVATARS[ti * 2] },
+                    { name: '', avatar: AVATARS[ti * 2 + 1] },
+                ]
+        )
+    );
     const [winPoints, setWinPoints] = useState(initialPoints || 10);
+    const [openAvatarPicker, setOpenAvatarPicker] = useState(null);
 
-    const canStart = p1Name.trim() && p2Name.trim();
+    const canStart = teamPlayers.every(
+        players => players.length >= 2 && players.every(p => p.name.trim())
+    );
+
+    const updatePlayer = (teamIdx, playerIdx, field, value) => {
+        setTeamPlayers(prev =>
+            prev.map((players, ti) =>
+                ti === teamIdx
+                    ? players.map((p, pi) => (pi === playerIdx ? { ...p, [field]: value } : p))
+                    : players
+            )
+        );
+    };
+
+    const addPlayer = (teamIdx) => {
+        const usedAvatars = teamPlayers.flat().map(p => p.avatar);
+        const freeAvatar = AVATARS.find(a => !usedAvatars.includes(a)) || AVATARS[0];
+        setTeamPlayers(prev =>
+            prev.map((players, ti) =>
+                ti === teamIdx ? [...players, { name: '', avatar: freeAvatar }] : players
+            )
+        );
+    };
+
+    const removePlayer = (teamIdx, playerIdx) => {
+        setTeamPlayers(prev =>
+            prev.map((players, ti) =>
+                ti === teamIdx ? players.filter((_, pi) => pi !== playerIdx) : players
+            )
+        );
+    };
 
     const handleStart = () => {
         onStart({
-            p1: { name: p1Name.trim(), avatar: p1Avatar },
-            p2: { name: p2Name.trim(), avatar: p2Avatar },
+            teams: teamNames.map((name, i) => ({
+                name: name.trim() || `Equip ${i + 1}`,
+                players: teamPlayers[i].map(p => ({ name: p.name.trim(), avatar: p.avatar })),
+            })),
             points: winPoints,
         });
     };
@@ -44,54 +83,83 @@ export function SetupScreen({ initialP1, initialP2, initialPoints, onStart }) {
         <div className="fade-in" style={{ width: '100%' }}>
             <h1>Wavelength</h1>
 
-            <div className="setup-players">
-                {/* Player 1 */}
-                <div className="card setup-player-card">
-                    <h3>Jugador 1</h3>
-                    <div className="avatar-picker">
-                        {AVATARS.map(a => (
-                            <button
-                                key={`p1-${a}`}
-                                className={`avatar-btn ${p1Avatar === a ? 'selected' : ''}`}
-                                onClick={() => setP1Avatar(a)}
-                            >{a}</button>
-                        ))}
-                    </div>
+            {[0, 1].map(teamIdx => (
+                <div
+                    key={teamIdx}
+                    className="card team-setup-card"
+                    style={{ borderLeft: `4px solid ${TEAM_COLORS[teamIdx]}` }}
+                >
                     <input
                         type="text"
-                        placeholder="Nom..."
-                        value={p1Name}
-                        onChange={e => setP1Name(e.target.value)}
-                        maxLength={12}
+                        className="team-name-input"
+                        value={teamNames[teamIdx]}
+                        onChange={e =>
+                            setTeamNames(prev => prev.map((n, i) => (i === teamIdx ? e.target.value : n)))
+                        }
+                        placeholder={`Equip ${teamIdx + 1}`}
+                        maxLength={16}
+                        style={{ color: TEAM_COLORS[teamIdx] }}
                     />
-                </div>
 
-                {/* Player 2 */}
-                <div className="card setup-player-card">
-                    <h3>Jugador 2</h3>
-                    <div className="avatar-picker">
-                        {AVATARS.map(a => (
-                            <button
-                                key={`p2-${a}`}
-                                className={`avatar-btn ${p2Avatar === a ? 'selected' : ''}`}
-                                onClick={() => setP2Avatar(a)}
-                            >{a}</button>
-                        ))}
-                    </div>
-                    <input
-                        type="text"
-                        placeholder="Nom..."
-                        value={p2Name}
-                        onChange={e => setP2Name(e.target.value)}
-                        maxLength={12}
-                    />
+                    {teamPlayers[teamIdx].map((player, playerIdx) => {
+                        const pickerKey = `${teamIdx}-${playerIdx}`;
+                        const isPickerOpen = openAvatarPicker === pickerKey;
+                        return (
+                            <div key={playerIdx} className="player-row">
+                                <button
+                                    className="avatar-cycle-btn"
+                                    onClick={() => setOpenAvatarPicker(isPickerOpen ? null : pickerKey)}
+                                    title="Canviar avatar"
+                                >
+                                    {player.avatar}
+                                </button>
+                                {isPickerOpen && (
+                                    <div className="avatar-picker-popup">
+                                        {AVATARS.map(a => (
+                                            <button
+                                                key={a}
+                                                className={`avatar-btn ${player.avatar === a ? 'selected' : ''}`}
+                                                onClick={() => {
+                                                    updatePlayer(teamIdx, playerIdx, 'avatar', a);
+                                                    setOpenAvatarPicker(null);
+                                                }}
+                                            >
+                                                {a}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                                <input
+                                    type="text"
+                                    placeholder={`Jugador ${playerIdx + 1}...`}
+                                    value={player.name}
+                                    onChange={e => updatePlayer(teamIdx, playerIdx, 'name', e.target.value)}
+                                    maxLength={12}
+                                    className="player-name-input"
+                                />
+                                {teamPlayers[teamIdx].length > 2 && (
+                                    <button
+                                        className="remove-player-btn"
+                                        onClick={() => removePlayer(teamIdx, playerIdx)}
+                                    >
+                                        <X size={16} />
+                                    </button>
+                                )}
+                            </div>
+                        );
+                    })}
+
+                    <button className="add-player-btn" onClick={() => addPlayer(teamIdx)}>
+                        <Plus size={16} /> Afegir jugador
+                    </button>
                 </div>
-            </div>
+            ))}
 
             {/* Win points config */}
             <div className="card" style={{ marginTop: '1rem', padding: '1rem 1.5rem' }}>
                 <label style={{ fontSize: '1rem', color: '#aaa' }}>
-                    Punts per guanyar: <strong style={{ color: '#fff', fontSize: '1.3rem' }}>{winPoints}</strong>
+                    Punts per guanyar:{' '}
+                    <strong style={{ color: '#fff', fontSize: '1.3rem' }}>{winPoints}</strong>
                 </label>
                 <input
                     type="range"
@@ -112,14 +180,21 @@ export function SetupScreen({ initialP1, initialP2, initialPoints, onStart }) {
 }
 
 /* ── PSYCHIC ── */
-export function PsychicScreen({ target, clue, setClue, onConfirm, card, psychic, player1, player2, winPoints }) {
+export function PsychicScreen({ target, clue, setClue, onConfirm, card, psychic, guesser, teams, currentTeamIdx, winPoints }) {
     return (
         <div className="fade-in" style={{ width: '100%' }}>
-            <ScoreBar player1={player1} player2={player2} winPoints={winPoints} />
+            <ScoreBar teams={teams} currentTeamIdx={currentTeamIdx} winPoints={winPoints} />
+
+            <div className="team-turn-badge" style={{ background: TEAM_COLORS[currentTeamIdx] }}>
+                {teams[currentTeamIdx].name}
+            </div>
 
             <h2>
                 <span className="phase-avatar">{psychic.avatar}</span> {psychic.name} — Psíquic
             </h2>
+            <p style={{ color: '#aaa', fontSize: '0.9rem', marginTop: '-0.5rem' }}>
+                Fes que <strong>{guesser.avatar} {guesser.name}</strong> ho endevini!
+            </p>
 
             <Dial
                 target={target}
@@ -135,7 +210,7 @@ export function PsychicScreen({ target, clue, setClue, onConfirm, card, psychic,
                     type="text"
                     placeholder="Escriu la teva pista..."
                     value={clue}
-                    onChange={(e) => setClue(e.target.value)}
+                    onChange={e => setClue(e.target.value)}
                     autoFocus
                 />
             </div>
@@ -149,16 +224,17 @@ export function PsychicScreen({ target, clue, setClue, onConfirm, card, psychic,
 }
 
 /* ── TRANSITION ── */
-export function TransitionScreen({ onReady, guesser }) {
+export function TransitionScreen({ onReady, guesser, teamName, currentTeamIdx }) {
     return (
         <div className="card fade-in">
             <EyeOff size={64} color="#ccc" style={{ marginBottom: '1rem' }} />
             <h2>Passa el dispositiu</h2>
-            <p style={{ marginBottom: '0.5rem' }}>
-                Passa el dispositiu a
-            </p>
-            <p style={{ fontSize: '1.5rem', marginBottom: '2rem' }}>
+            <p style={{ marginBottom: '0.5rem' }}>Passa el dispositiu a</p>
+            <p style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>
                 <span>{guesser.avatar}</span> <strong>{guesser.name}</strong>
+            </p>
+            <p style={{ color: TEAM_COLORS[currentTeamIdx], fontSize: '0.9rem', marginBottom: '2rem' }}>
+                {teamName}
             </p>
             <button onClick={onReady}>
                 <Check size={20} style={{ marginRight: '8px', verticalAlign: 'middle' }} />
@@ -169,17 +245,19 @@ export function TransitionScreen({ onReady, guesser }) {
 }
 
 /* ── GUESSER ── */
-export function GuesserScreen({ clue, guess, setGuess, onConfirm, card, guesser, player1, player2, winPoints }) {
+export function GuesserScreen({ clue, guess, setGuess, onConfirm, card, guesser, teams, currentTeamIdx, winPoints }) {
     return (
         <div className="fade-in" style={{ width: '100%' }}>
-            <ScoreBar player1={player1} player2={player2} winPoints={winPoints} />
+            <ScoreBar teams={teams} currentTeamIdx={currentTeamIdx} winPoints={winPoints} />
 
             <h2>
                 <span className="phase-avatar">{guesser.avatar}</span> {guesser.name} — Endevina
             </h2>
 
             <div className="card" style={{ padding: '1rem', marginBottom: '1.5rem' }}>
-                <span style={{ fontSize: '0.85rem', color: '#aaa', textTransform: 'uppercase', letterSpacing: '1px' }}>PISTA</span>
+                <span style={{ fontSize: '0.85rem', color: '#aaa', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                    PISTA
+                </span>
                 <h3 style={{ margin: '0.5rem 0', fontSize: '2rem' }}>"{clue}"</h3>
             </div>
 
@@ -202,13 +280,13 @@ export function GuesserScreen({ clue, guess, setGuess, onConfirm, card, guesser,
 }
 
 /* ── REVEAL ── */
-export function RevealScreen({ clue, guess, target, score, onNext, card, psychic, guesser, player1, player2, winPoints }) {
+export function RevealScreen({ clue, guess, target, score, onNext, card, psychic, guesser, teams, currentTeamIdx, winPoints }) {
     const scoreColors = { 4: '#4ecdc4', 3: '#ffe66d', 2: '#ff6b6b', 0: '#666' };
     const scoreEmoji = { 4: '🎯', 3: '👏', 2: '👍', 0: '😬' };
 
     return (
         <div className="fade-in" style={{ width: '100%' }}>
-            <ScoreBar player1={player1} player2={player2} winPoints={winPoints} />
+            <ScoreBar teams={teams} currentTeamIdx={currentTeamIdx} winPoints={winPoints} />
 
             <h2>Resultat</h2>
 
@@ -227,16 +305,18 @@ export function RevealScreen({ clue, guess, target, score, onNext, card, psychic
 
             <div style={{ margin: '1.5rem 0' }}>
                 <span style={{ fontSize: '4rem' }}>{scoreEmoji[score] || '😬'}</span>
-                <div style={{
-                    fontSize: '2.5rem',
-                    fontWeight: 'bold',
-                    color: scoreColors[score] || '#666',
-                    marginTop: '0.3rem'
-                }}>
+                <div
+                    style={{
+                        fontSize: '2.5rem',
+                        fontWeight: 'bold',
+                        color: scoreColors[score] || '#666',
+                        marginTop: '0.3rem',
+                    }}
+                >
                     +{score}
                 </div>
-                <p style={{ color: '#aaa', fontSize: '0.9rem', marginTop: '0.5rem' }}>
-                    {guesser.avatar} {guesser.name} guanya {score} punt{score !== 1 ? 's' : ''}
+                <p style={{ color: TEAM_COLORS[currentTeamIdx], fontSize: '0.9rem', marginTop: '0.5rem' }}>
+                    {teams[currentTeamIdx].name} guanya {score} punt{score !== 1 ? 's' : ''}
                 </p>
             </div>
 
@@ -249,28 +329,28 @@ export function RevealScreen({ clue, guess, target, score, onNext, card, psychic
 }
 
 /* ── WIN ── */
-export function WinScreen({ winner, player1, player2, onPlayAgain }) {
+export function WinScreen({ winnerTeamIdx, teams, onPlayAgain }) {
+    const winner = teams[winnerTeamIdx];
+
     return (
         <div className="fade-in" style={{ width: '100%', textAlign: 'center' }}>
             <div style={{ fontSize: '5rem', marginBottom: '0.5rem' }}>🏆</div>
-            <h1 style={{ fontSize: '2.5rem' }}>
-                {winner.avatar} {winner.name}
-            </h1>
-            <h2 style={{ color: '#4ecdc4', marginTop: '0' }}>ha guanyat!</h2>
+            <h1 style={{ fontSize: '2.5rem' }}>{winner.name}</h1>
+            <h2 style={{ color: TEAM_COLORS[winnerTeamIdx], marginTop: '0' }}>ha guanyat!</h2>
 
             <div className="card" style={{ marginTop: '2rem', padding: '1.5rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-around', fontSize: '1.3rem' }}>
-                    <div>
-                        <span style={{ fontSize: '2rem' }}>{player1.avatar}</span>
-                        <div style={{ fontWeight: 'bold' }}>{player1.name}</div>
-                        <div style={{ fontSize: '2rem', color: '#4ecdc4' }}>{player1.score}</div>
-                    </div>
-                    <div style={{ alignSelf: 'center', color: '#555', fontSize: '1.5rem' }}>vs</div>
-                    <div>
-                        <span style={{ fontSize: '2rem' }}>{player2.avatar}</span>
-                        <div style={{ fontWeight: 'bold' }}>{player2.name}</div>
-                        <div style={{ fontSize: '2rem', color: '#4ecdc4' }}>{player2.score}</div>
-                    </div>
+                    {teams.map((team, i) => (
+                        <div key={i}>
+                            <div style={{ color: TEAM_COLORS[i], fontWeight: 'bold', marginBottom: '0.5rem' }}>
+                                {team.name}
+                            </div>
+                            <div style={{ fontSize: '2rem', color: '#4ecdc4' }}>{team.score}</div>
+                            <div style={{ fontSize: '0.85rem', color: '#aaa', marginTop: '0.5rem' }}>
+                                {team.players.map(p => `${p.avatar} ${p.name}`).join(', ')}
+                            </div>
+                        </div>
+                    ))}
                 </div>
             </div>
 
