@@ -379,3 +379,51 @@ input[type="range"]::-webkit-slider-thumb {
   cursor: pointer;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
 }
+
+/* ── Reset corner button ── */
+.reset-corner-btn {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 1.2rem;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.6);
+  box-shadow: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.reset-corner-btn:hover {
+  background: rgba(255, 100, 100, 0.3);
+  color: #fff;
+  box-shadow: none;
+  transform: none;
+}
+
+/* ── Reconnect banner (multi-device) ── */
+.reconnect-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: rgba(255, 230, 109, 0.95);
+  color: #1a1a2e;
+  padding: 8px 12px;
+  text-align: center;
+  font-size: 0.85rem;
+  font-weight: 600;
+  z-index: 200;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
