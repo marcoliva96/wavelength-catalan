@@ -12,6 +12,7 @@ import {
   RevealScreen,
   WinScreen,
 } from './components/GameScreens';
+import InstallPrompt from './components/InstallPrompt';
 import { cards } from './data/cards';
 import './index.css';
 
@@ -488,6 +489,9 @@ function App() {
             🔄 Reconnectant amb la sala {state.roomCode}…
           </div>
         )}
+
+      {/* PWA install prompt (Android native or iOS instructions) */}
+      <InstallPrompt />
 
       {/* Reset button (small, in corner) — always available except on mode select */}
       {state.phase !== PHASES.MODE_SELECT && (
